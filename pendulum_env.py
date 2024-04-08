@@ -122,8 +122,11 @@ class PendulumEnv(gym.Env):
     def get_state(self):  # 获取现在的状态
         return self.state
 
-    def get_a(self, th, thdot, u):
-        angle = angle_normalize(th)
+    def reward(self, th, thdot, u):
+        costs = 5 * angle_normalize(th) ** 2 + 0.1 * thdot ** 2 + u ** 2  # cost是reward的相反数，是正的。reward是负的
+        return -costs
+
+    def get_d_d_theta(self, theta, d_theta, u):
         m = self.m
         g = self.g
         l = self.l
@@ -131,35 +134,38 @@ class PendulumEnv(gym.Env):
         K = self.K
         R = self.R
         J = self.J
-        a = (1 / J) * (m * g * l * math.sin(angle) - b * thdot - (K ** 2 / R) * thdot + (K / R) * u)
-        return a
+
+        d_d_theta = (1 / J) * (m * g * l * math.sin(theta) - b * d_theta - (K ** 2 / R) * d_theta + (K / R) * u)
+        return d_d_theta
+
+    def new_state(self, theta, d_theta, u):
+        # 计算新状态
+        dt = self.dt
+        d_d_theta = self.get_d_d_theta(theta, d_theta, u)
+        new_theta = theta + dt * d_theta
+        new_d_theta = d_theta + dt * d_d_theta
+        # 换一下形式
+        new_theta = angle_normalize(new_theta)
+        new_d_theta = np.clip(new_d_theta, -self.max_speed, self.max_speed)
+        return new_theta, new_d_theta
+
 
     def step(self, u):
-        th, thdot = self.state  # th := theta
+        th, thdot = self.state  # th，theta，角度；thdot角速度
 
-        g = self.g
-        m = self.m
-        l = self.l
         dt = self.dt
-
         u = np.clip(u, -self.max_voltage, self.max_voltage)[0]
         self.last_u = u  # for rendering
 
-        # costs = angle_normalize(th) ** 2 + 0.1 * thdot ** 2 + 0.001 * (u ** 2)
-        costs = 5 * angle_normalize(th) ** 2 + 0.1 * thdot ** 2 + u ** 2  # cost是reward的相反数，是正的。reward是负的
-
-        # newthdot = thdot + (3 * g / (2 * l) * np.sin(th) + 3.0 / (m * l ** 2) * u) * dt
-        newthdot = thdot + dt * self.get_a(th, thdot, u)
-        newthdot = np.clip(newthdot, -self.max_speed, self.max_speed)
-        newth = th + newthdot * dt
-
-        self.state = np.array([newth, newthdot])
+        reward = self.reward(th, thdot, u)
+        new_theta, new_d_theta = self.new_state(th, thdot, u)
+        self.state = np.array([new_theta, new_d_theta])  # 更新状态
 
         if self.render_mode == "human":
             self.render()
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
         # 返回状态和reward
-        return self._get_obs(), -costs
+        return self._get_obs(), reward
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)
@@ -186,7 +192,7 @@ class PendulumEnv(gym.Env):
         # return np.array([np.cos(theta), np.sin(theta), thetadot], dtype=np.float32)
         return np.array([theta, thetadot], dtype=np.float32)
 
-    def render(self):
+    def render(self):  # 渲染图像
         if self.render_mode is None:
             assert self.spec is not None
             gym.logger.warn(
