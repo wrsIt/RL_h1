@@ -2,6 +2,7 @@ import math
 import os
 
 import numpy as np
+import pandas
 import pandas as pd
 
 from pendulum_env import PendulumEnv
@@ -9,7 +10,7 @@ from pendulum_env import PendulumEnv
 
 # 用numpy加速计算
 class Agent:
-    def __init__(self, theta_n=200, d_theta_n=200, action_n=3, gamma=0.98):
+    def __init__(self, theta_n=60, d_theta_n=40, action_n=3, gamma=0.98):
         self.model_name = self.__class__.__name__  # 模型名称
 
         self.gamma = gamma  # 衰减因子
@@ -24,13 +25,12 @@ class Agent:
         self.THETA_STATES = np.round(np.linspace(-math.pi, math.pi, self.theta_n), decimals=4)
         self.D_THETA_STATES = np.round(np.linspace(-15 * math.pi, 15 * math.pi, self.d_theta_n), decimals=4)
 
-        self.q_table = pd.DataFrame()  # 空的，要init一下
         # 初始化Q(state, action)表，其中state=(theta, d_theta)
         self.MAX_EPISODES = 100  # 智能体在环境中运行的序列的数量
         self.EPSILON = 0.9  # 贪心策略的参数
         self.alpha = 0.1  # 更新时的学习率
         self.lam = 0.98  # 折扣因子
-        self.ts = 0.0001  # 刷新时间
+        self.ts = 0.005  # 刷新时间
         self.one_turn_step = 50000
 
         self.data_dir = "./result/%s_th-%s_dth-%s_a-%s/" % (
@@ -96,34 +96,61 @@ class Agent:
         d_theta = self.discretize_mapping(d_theta, self.D_THETA_STATES)
         return theta, d_theta  # 单位是弧度
 
+    # def update_env(self, state, episode, step_counter):
+    #     if self.is_final_state(state):
+    #         content = "Episode %s : total step = %s" % (episode + 1, step_counter)
+    #         print('\n', content)
+    #     else:
+    #         state = self.discretize_state(state)  # 离散化状态 弧度
+    #         content = "Episode %s：step = %s" % (episode + 1, step_counter)
+    #         content += " angle：" + str(state[0] * 180 / math.pi) + ", angular_velocity：" + str(
+    #             state[1] / math.pi) + "pi"
+    #         print('\n', content)
     def update_env(self, state, episode, step_counter):
         if self.is_final_state(state):
-            content = "Episode %s : total step = %s" % (episode + 1, step_counter)
-            print('\n', content)
+            interaction = "Episode %s：total_step = %s" % (episode + 1, step_counter)
+            print('\r{}'.format(interaction), end='')
+            # time.sleep(2)
+            print('\n wowow finished!')
         else:
-            state = self.discretize_state(state)  # 离散化状态 弧度
-            content = "Episode %s：step = %s" % (episode + 1, step_counter)
-            content += " angle：" + str(state[0] * 180 / math.pi) + ", angular_velocity：" + str(
+            state = self.discretize_state(state)
+            interaction = "Episode %s：step = %s" % (episode + 1, step_counter)
+            interaction += " angle：" + str(state[0] * 180 / math.pi) + ", angular_velocity：" + str(
                 state[1] / math.pi) + "pi"
-            print('\n', content)
+            print('\r{}'.format(interaction), end='')
 
-    def choose_max_Q_action(self, state, q_table):
-        state_actions = q_table.loc[state]  # 这个状态对应的一行
-        if np.random.random() < self.EPSILON:
-            action = state_actions.idxmax()  # 贪心策略：选概率较大的动作(返回具有最大值的索引位置)
-        else:
+    def choose_max_Q_action(self, state: tuple, table: pandas.DataFrame):
+        state_actions = table.loc[state]  # 这个状态对应的一行
+        if (np.random.random() > self.EPSILON) or (state_actions.sum() == 0):
             action = np.random.choice(self.actions)  # ε-greedy中探索性选择动作
+        else:
+            action = state_actions.idxmax()  # 贪心策略：选概率较大的动作(返回具有最大值的索引位置)
         return action
 
     def reward(self, th, thdot, u):
-        costs = 5 * angle_normalize(th) ** 2 + 0.1 * thdot ** 2 + u ** 2  # cost是reward的相反数，是正的。reward是负的
+        costs = 5 * (angle_normalize(th) ** 2) + 0.1 * (thdot) ** 2 + u ** 2  # cost是reward的相反数，是正的。reward是负的
         return -costs
+
+    def get_d_d_theta(self, theta, d_theta, u):
+        m = 0.055
+        g = 9.81
+        l = 0.042  # 重心到转子的距离
+        J = 1.91e-4  # 转动惯量
+        b = 3e-6  # 粘滞阻尼
+        K = 0.0536  # 转矩常数
+        R = 9.5
+        theta = angle_normalize(theta)  # ************要加这一步
+        d_d_theta = (1 / J) * (
+                m * g * l * math.sin(theta) - b * d_theta - (K ** 2 / R) * d_theta + (
+                K / R) * u)
+        return d_d_theta
 
     def get_feedback(self, state, action):
         theta = state[0]
         d_theta = state[1]  # 角速度/pi
         reward = self.reward(theta, d_theta, action)
-        d_d_theta = PendulumEnv.get_d_d_theta(theta, d_theta, action)
+        # print(theta,d_theta,action,reward)
+        d_d_theta = self.get_d_d_theta(theta, d_theta, action)  # 有点问题
 
         # 更新角速度
         d_theta_new = d_theta + self.ts * d_d_theta
@@ -145,20 +172,27 @@ class Agent:
         for episode in range(self.MAX_EPISODES):
             step_counter = 0
             # 与环境交互
-            observation, _ = env.reset()
-            observation = tuple(observation)
+            if is_view:
+                observation, _ = env.reset()
+                observation = tuple(observation)
+            else:
+                observation, _ = env.reset(is_view=is_view)
+                observation = tuple(observation)
+            # observation, _ = env.reset(is_view=is_view)
+            # observation = tuple(observation)
             # 单个回合训练
             is_terminated = False  # 标记该回合是否结束
             self.update_env(observation, episode, step_counter)  # 更新环境
             while step_counter < self.one_turn_step and (not is_terminated):
                 # 离散当前状态 以便在q表中索引
                 observation_discretized = self.discretize_state(observation)
-                max_Q_action = self.choose_max_Q_action(observation_discretized, self.q_table)
-                max_Q = self.q_table.loc[observation_discretized]
-                if is_view:
-                    observation_new, reward = self.get_feedback_env(env, max_Q_action)
-                else:
+                max_Q_action = self.choose_max_Q_action(observation_discretized, q_table)
+                max_Q = q_table.loc[observation_discretized, max_Q_action]
+                if not is_view:
                     observation_new, reward = self.get_feedback(observation, max_Q_action)
+                else:
+                    observation_new, reward = self.get_feedback_env(env, max_Q_action)
+
                 # Q-target
                 if not self.is_final_state(observation_new):
                     q_target = reward + self.lam * max(q_table.loc[self.discretize_state(observation_new)])
@@ -170,6 +204,7 @@ class Agent:
                 q_table.loc[observation_discretized, max_Q_action] += self.alpha * (q_target - max_Q)
                 observation = observation_new
                 self.update_env(observation, episode, step_counter)
+                # print("!!!!!!!!!", observation, q_target)
                 step_counter += 1
         return q_table
 
@@ -203,6 +238,6 @@ def angle_normalize(x):
 if __name__ == "__main__":
     env = PendulumEnv("human")
     agent = Agent()
-    q_table = agent.train(env)
-    q_table.to_csv('data/result_q_table.csv', index=True, header=True, date_format='%.4f')
+    # q_table = agent.train(env, is_view=False)
+    # q_table.to_csv('data/result_q_table.csv', index=True, header=True, date_format='%.4f')
     agent.read_q_table(env)

@@ -149,7 +149,6 @@ class PendulumEnv(gym.Env):
         new_d_theta = np.clip(new_d_theta, -self.max_speed, self.max_speed)
         return new_theta, new_d_theta
 
-
     def step(self, u):
         th, thdot = self.state  # th，theta，角度；thdot角速度
 
@@ -158,16 +157,17 @@ class PendulumEnv(gym.Env):
         self.last_u = u  # for rendering
 
         reward = self.reward(th, thdot, u)
-        new_theta, new_d_theta = self.new_state(th, thdot, u)
+        # new_theta, new_d_theta = self.new_state(th, thdot, u)
+        new_d_theta = thdot + self.get_d_d_theta(th, thdot, u) * dt
+        new_d_theta = np.clip(new_d_theta, -self.max_speed, self.max_speed)
+        new_theta = th + new_d_theta * dt
         self.state = np.array([new_theta, new_d_theta])  # 更新状态
 
         if self.render_mode == "human":
             self.render()
-        # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
-        # 返回状态和reward
         return self._get_obs(), reward
 
-    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
+    def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None, is_view=True):
         super().reset(seed=seed)
         if options is None:
             high = np.array([DEFAULT_X, DEFAULT_Y])
@@ -180,10 +180,10 @@ class PendulumEnv(gym.Env):
             y = utils.verify_number_and_cast(y)
             high = np.array([x, y])
         low = -high  # We enforce symmetric limits.
-        self.state = self.np_random.uniform(low=low, high=high)
+        self.state = np.array([-math.pi, 0])
         self.last_u = None
-
-        if self.render_mode == "human":
+        if self.render_mode == "human" and is_view:
+            print(is_view)
             self.render()
         return self._get_obs(), {}
 

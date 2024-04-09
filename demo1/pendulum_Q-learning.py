@@ -34,7 +34,6 @@ T_s = 0.005  # 采样频率
 def build_q_table(n_angle_states, n_angular_velocity_states, u_voltage_actions):
     index = pd.MultiIndex.from_product([n_angle_states, n_angular_velocity_states])  # 以(角度，角速度)为索引构建Q表
     columns = u_voltage_actions  # 列值为动作集
-
     # 构造Q表
     table = pd.DataFrame(
         np.zeros((len(n_angle_states) * len(n_angular_velocity_states), len(u_voltage_actions))), index=index,
@@ -47,12 +46,11 @@ def build_q_table(n_angle_states, n_angular_velocity_states, u_voltage_actions):
 
 def choose_action(state: tuple, q_table_: pandas.DataFrame):
     state_actions = q_table_.loc[state]  # 获得当前state对应的action值
-    random_rate =   np.random.uniform()  # 获得一个随机数
+    random_rate = np.random.uniform()  # 获得一个随机数
     if (random_rate > EPSILON) or (state_actions.sum() == 0):
         action = np.random.choice(U_Voltage_ACTIONS)  # ε-greedy中探索性选择动作
     else:
         action = state_actions.idxmax()  # 贪心策略选择较大概率的动作
-
     return action
 
 
@@ -110,7 +108,7 @@ def get_env_feedback(state: tuple, action):
     a_p_k = state[1]  # 角速度/pi
 
     Reward = - (5 * (angle_normalize(a_k) ** 2) + 0.1 * (a_p_k) ** 2 + action ** 2)
-
+    # print(a_k, a_p_k, action,Reward)
     # 获得角加速度
     a_pp = get_a__(a_k, a_p_k, action)
 
@@ -164,7 +162,6 @@ def is_mid(val, states):
 def run_pendulum_qlearning(env, is_view=False):
     # 构造Q表
     q_table = build_q_table(N_Angle_STATES, N_Angular_Velocity_STATES, U_Voltage_ACTIONS)
-
     # 训练MAX_EPISODES个回合
     for episode in range(MAX_EPISODES):
         step_counter = 0
@@ -204,9 +201,9 @@ def run_pendulum_qlearning(env, is_view=False):
                 # 更新Q表
             q_table.loc[state_round, action] += Alp * (q_target - q_predict)
             state = state_new
-
             # 打印控制台
             update_env(state, episode, step_counter)
+            # print("@@@@@@@",state, q_target)
             step_counter += 1
 
     return q_table
@@ -238,9 +235,11 @@ def read_q_table(env):
 if __name__ == '__main__':
     env = self_pendulum_env.PendulumEnv("human")
     # 训练时，最好把is_view关闭，因为动画渲染需要时间，影响了整体训练的速度
-    # q_table = run_pendulum_qlearning(env, is_view=False)
-    # q_table.to_csv('data/result_q_table.csv', index=True, header=True, date_format='%.4f')
-    read_q_table(env)
+    # a, b = get_env_feedback((-3.14, 0.0), 0)
+    # print(a, b)
+    q_table = run_pendulum_qlearning(env, is_view=False)
+    q_table.to_csv('data/result_q_table.csv', index=True, header=True, date_format='%.4f')
+    # read_q_table(env)
 
 #
 # print(N_Angle_STATES)
