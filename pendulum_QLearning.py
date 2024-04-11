@@ -120,7 +120,8 @@ class Agent:
 
     def choose_max_Q_action(self, state: tuple, table: pandas.DataFrame):
         state_actions = table.loc[state]  # 这个状态对应的一行
-        if (np.random.random() > self.EPSILON) or (state_actions.sum() == 0):  # 初期对环境的探索比较少,(state_actions.sum() == 0)代表着一种很少被探索的状态。这样就不用改变EPSILON了。也可以随着训练轮数，对环境了解程度的上升，逐渐减少EPSILON，当然大小关系要弄清楚。
+        if (np.random.random() > self.EPSILON) or (
+                state_actions.sum() == 0):  # 初期对环境的探索比较少,(state_actions.sum() == 0)代表着一种很少被探索的状态。这样就不用改变EPSILON了。也可以随着训练轮数，对环境了解程度的上升，逐渐减少EPSILON，当然大小关系要弄清楚。
             action = np.random.choice(self.actions)  # ε-greedy中探索性选择动作
         else:
             action = state_actions.idxmax()  # 贪心策略：选概率较大的动作(返回具有最大值的索引位置)
@@ -237,6 +238,6 @@ def angle_normalize(x):
 if __name__ == "__main__":
     env = PendulumEnv("human")
     agent = Agent()
-    q_table = agent.train(env, is_view=False)
-    q_table.to_csv('data/result_q_table.csv', index=True, header=True, date_format='%.4f')
-#    agent.read_q_table(env)
+    # q_table = agent.train(env, is_view=False)
+    # q_table.to_csv('data/result_q_table.csv', index=True, header=True, date_format='%.4f')
+    agent.read_q_table(env)
