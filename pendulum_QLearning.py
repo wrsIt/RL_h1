@@ -238,6 +238,6 @@ def angle_normalize(x):
 if __name__ == "__main__":
     env = PendulumEnv("human")
     agent = Agent()
-    # q_table = agent.train(env, is_view=False)
-    # q_table.to_csv('data/result_q_table.csv', index=True, header=True, date_format='%.4f')
+    q_table = agent.train(env, is_view=False)
+    q_table.to_csv('data/result_q_table.csv', index=True, header=True, date_format='%.4f')
     agent.read_q_table(env)
