@@ -32,6 +32,10 @@ class Agent:
         self.lam = 0.98  # 折扣因子
         self.ts = 0.005  # 刷新时间
         self.one_turn_step = 50000
+        self.epsilon_start = 0.9
+        self.epsilon_end = 0.1
+        self.epsilon_decay = (self.epsilon_start - self.epsilon_end) / self.one_turn_step  # 线性衰减实现
+        self.decay_rate = 0.99  # 衰减率
 
         self.data_dir = "./result/%s_th-%s_dth-%s_a-%s/" % (
             self.model_name, self.theta_n, self.d_theta_n, self.action_n)  # 数据保存路径
@@ -121,6 +125,26 @@ class Agent:
 
     def choose_max_Q_action(self, state: tuple, table: pandas.DataFrame):
         state_actions = table.loc[state]  # 这个状态对应的一行
+        """
+        # 线性衰减实现
+        self.EPSILON -= self.epsilon_decay 
+        self.EPSILON = max(self.epsilon_start, self.epsilon_end)  # 确保epsilon不会小于最终值 线性衰减实现
+        if np.random.random() < self.EPSILON:
+            action = np.random.choice(self.actions)  # ε-greedy中探索性选择动作
+        else:
+            action = state_actions.idxmax()  # 贪心策略：选概率较大的动作(返回具有最大值的索引位置)
+        return action
+        """
+        """
+        # 指数衰减实现
+        self.EPSILON *= self.decay_rate
+        self.EPSILON = max(self.epsilon_start, self.epsilon_end)  # 确保epsilon不会小于最终值
+        if np.random.random() < self.EPSILON:
+            action = np.random.choice(self.actions)  # ε-greedy中探索性选择动作
+        else:
+            action = state_actions.idxmax()  # 贪心策略：选概率较大的动作(返回具有最大值的索引位置)
+        return action
+        """
         if (np.random.random() > self.EPSILON) or (state_actions.sum() == 0):
             action = np.random.choice(self.actions)  # ε-greedy中探索性选择动作
         else:
