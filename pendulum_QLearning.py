@@ -144,6 +144,7 @@ class Agent:
         else:
             action = state_actions.idxmax()  # 贪心策略：选概率较大的动作(返回具有最大值的索引位置)
         return action
+        
         """
         if (np.random.random() > self.EPSILON) or (state_actions.sum() == 0):
             action = np.random.choice(self.actions)  # ε-greedy中探索性选择动作
